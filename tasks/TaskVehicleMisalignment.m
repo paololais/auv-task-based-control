@@ -17,7 +17,7 @@ classdef TaskVehicleMisalignment < Task
             
             % Calculate reference velocity (proportional to misalignment)
             obj.xdotbar = 1.5 * (0.1 - theta);
-            obj.xdotbar = Saturate(obj.xdotbar, 0.2);
+            obj.xdotbar = Saturate(obj.xdotbar, 0.5);
         end
 
         function updateJacobian(obj, robot)

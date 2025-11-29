@@ -11,9 +11,9 @@ classdef ActionManager < handle
             obj.actions{end+1} = taskStack;
         end
 
-        function addUnifyingTaskList(obj, action, taskList)
+        function addUnifyingTaskList(obj, actionIndex, taskList)
              if actionIndex >= 1 && actionIndex <= length(obj.actions)
-                obj.actions{action}.unifyingTasks = taskList;
+                obj.actions{actionIndex}.unifyingTasks = taskList;
             else
                 error('Action index out of range');
             end
