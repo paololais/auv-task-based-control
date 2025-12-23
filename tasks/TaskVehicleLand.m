@@ -11,7 +11,7 @@ classdef TaskVehicleLand < Task
                 alt = robot.altitude;
             end
                       
-            obj.xdotbar = - 0.5 * alt;
+            obj.xdotbar = - 0.5 * (alt-0.5);
             obj.xdotbar = Saturate(obj.xdotbar, 0.6);
 
         end

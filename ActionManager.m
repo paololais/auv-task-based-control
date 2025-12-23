@@ -1,58 +1,92 @@
 classdef ActionManager < handle
     properties
-        actions = {}      % cell array of actions (each action = stack of tasks)
-        currentAction = 1 % index of currently active action
-        previousAction = [] % index of previously active action
+        actions = {}        % cell array of actions (each action = stack of tasks)
+        actionsName = {}    % name of the actions - array
+        unifiedList = {}    % array containing the unified list of all tasks
+        
+        currentAction = 1   % index of currently active action
+        previousAction = 1  % index of previously active action
+        
+        timeSinceSwitch = 0;  % time since last action switch
+        transitionTime = 2.0    % duration of transition [s]
     end
 
     methods
-        function addAction(obj, taskStack)
+        function addAction(obj, taskStack, action_name)
             % taskStack: cell array of tasks that define an action
             obj.actions{end+1} = taskStack;
+            obj.actionsName{end+1} = char(action_name);
+        end
+        
+        function addUnifyingTaskList(obj, unifiedList)
+             obj.unifiedList = unifiedList;
         end
 
-        function addUnifyingTaskList(obj, actionIndex, taskList)
-             if actionIndex >= 1 && actionIndex <= length(obj.actions)
-                obj.actions{actionIndex}.unifyingTasks = taskList;
-            else
-                error('Action index out of range');
+        function [v_nu, qdot] = computeICAT(obj, robot, dt)
+            % Update time
+            obj.timeSinceSwitch = obj.timeSinceSwitch + dt;
+            t = obj.timeSinceSwitch;
+            T = obj.transitionTime;
+
+            % Retrieve task stacks
+            unifiedTasks = obj.unifiedList;
+            currTasks = obj.actions{obj.currentAction};
+            prevTasks = obj.actions{obj.previousAction};
+
+            % Membership flags (handle comparison!)
+            inCurrent = cellfun(@(t) any(cellfun(@(c) c == t, currTasks)), unifiedTasks);
+            inPrevious = cellfun(@(t) any(cellfun(@(p) p == t, prevTasks)), unifiedTasks);
+
+            % Update tasks and compute transition activations
+            for i = 1:length(unifiedTasks)
+                task = unifiedTasks{i};
+        
+                task.updateReference(robot);
+                task.updateJacobian(robot);
+                task.updateActivation(robot);
+        
+                if inCurrent(i) && ~inPrevious(i)
+                    % Appearing task
+                    a = IncreasingBellShapedFunction(0, T, 0, 1, t);
+       
+                elseif ~inCurrent(i) && inPrevious(i)
+                    % Disappearing task
+                    a = DecreasingBellShapedFunction(0, T, 0, 1, t);    
+                else
+                    a = 1;
+                end
+                task.A = a * task.A;
             end
-        end
 
-        function [v_nu, qdot] = computeICAT(obj, robot)
-            % Get current action
-            tasks = obj.actions{obj.currentAction};
-
-            % 1. Update references, Jacobians, activations
-            for i = 1:length(tasks)
-                tasks{i}.updateReference(robot);
-                tasks{i}.updateJacobian(robot);
-                tasks{i}.updateActivation(robot);
-            end
-
-            % 2. Perform ICAT (task-priority inverse kinematics)
+            % Perform ICAT (task-priority inverse kinematics)
             ydotbar = zeros(13,1);
             Qp = eye(13);
-            for i = 1:length(tasks)
-                [Qp, ydotbar] = iCAT_task(tasks{i}.A, tasks{i}.J, ...
-                                           Qp, ydotbar, tasks{i}.xdotbar, ...
+            for i = 1:length(unifiedTasks)
+                t = unifiedTasks{i};
+                [Qp, ydotbar] = iCAT_task(t.A, t.J, ...
+                                           Qp, ydotbar, t.xdotbar, ...
                                            1e-4, 0.01, 10);
             end
 
-            % 3. Last task: residual damping
+            % Last task: residual damping
             [~, ydotbar] = iCAT_task(eye(13), eye(13), Qp, ydotbar, zeros(13,1), 1e-4, 0.01, 10);
 
-            % 4. Split velocities for vehicle and arm
+            % Split velocities for vehicle and arm
             qdot = ydotbar(1:7);
             v_nu = ydotbar(8:13); % projected on the vehicle frame
         end
 
-        function setCurrentAction(obj, actionIndex)
-            % Switch to a different action
-            if actionIndex >= 1 && actionIndex <= length(obj.actions)
-                obj.currentAction = actionIndex;
-            else
-                error('Action index out of range');
+        function setCurrentAction(obj, action_name)           
+            idx = find(strcmp(obj.actionsName, action_name), 1);
+
+            if isempty(idx)
+                error('Action "%s" not found.', action_name);
+            end
+
+            if idx ~= obj.currentAction
+                obj.previousAction = obj.currentAction;
+                obj.currentAction  = idx;
+                obj.timeSinceSwitch = 0;   % reset transition timer
             end
         end
     end

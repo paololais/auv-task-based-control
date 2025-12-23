@@ -1,21 +1,19 @@
 %% 
 classdef TaskVehicleAltitude < Task   
     properties
-        desired_alt = 2.0;  % meters from seafloor
+        desired_alt = 3.0;  % meters from seafloor
     end
 
     methods
         function updateReference(obj, robot)
             if isempty(robot.altitude)
-                alt = 2;
+                alt = 3.0;
             else
                 alt = robot.altitude;
             end
-
-            error = obj.desired_alt - alt;
                       
-            obj.xdotbar = 0.2 * error;
-            obj.xdotbar = Saturate(obj.xdotbar, 0.2);
+            obj.xdotbar = 0.6 * (3.0 - alt);
+            obj.xdotbar = Saturate(obj.xdotbar, 0.6);
 
         end
 
@@ -28,15 +26,15 @@ classdef TaskVehicleAltitude < Task
         function updateActivation(obj, robot)
             % Activate when close to seafloor
             % Fully active when altitude < 2.0m
-            % Start activating when altitude < 2.5m
+            % Start activating when altitude < 3.0m
             % Compute scalar activation
             if isempty(robot.altitude)
-                alt = 2;
+                alt = 3.0;
             else
                 alt = robot.altitude;
             end
 
-            obj.A = DecreasingBellShapedFunction(2.0, 2.5, 0, 1, alt);
+            obj.A = DecreasingBellShapedFunction(2.0, 3.0, 0, 1, alt);
         end
     end
 end
